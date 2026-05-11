@@ -1,5 +1,5 @@
 #import all routing templates and request
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy  #for database opration 
 from flask_login import (LoginManager,UserMixin,login_user,logout_user,login_required,current_user) 
 from werkzeug.security import generate_password_hash, check_password_hash #Password hashing
@@ -146,25 +146,24 @@ def all_task_include(task):
     }
 
 
-
 @app.route("/api/tasks", methods=["GET"])
 @login_required
 def get_tasks():
-
     tasks = Task.query.filter_by(user_id=current_user.id).all()
 
-    return {"tasks": [all_task_include(task) for task in tasks]}, 200
+    task_list = []
 
+    for task in tasks:
+        task_list.append({
+            "id": task.id,
+            "title": task.title or "",
+            "description": str(task.description) if task.description else "",
+            "priority": task.priority or "",
+            "status": task.status or "Pending",
+            "created_date": task.created_date.strftime("%Y-%m-%d %H:%M:%S") if task.created_date else ""
+        })
 
-def all_task_include(task):
-    return {
-        "id": task.id,
-        "title": task.title,
-        "description": task.description,
-        "priority": task.priority,
-        "status": task.status,
-        "created_date": task.created_date.strftime("%Y-%m-%d %H:%M:%S")
-    }
+    return jsonify({"tasks": task_list})
 #update end point 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 @login_required

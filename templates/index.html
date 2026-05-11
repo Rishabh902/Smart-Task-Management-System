@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Task Dashboard</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -16,18 +15,17 @@
 
         <!-- TOP BAR -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-
-            <h1 class="fw-bold">
-                Smart Task Manager
-            </h1>
+            <h1 class="fw-bold">Smart Task Manager</h1>
 
             <a href="/logout" class="btn btn-danger">
                 Logout
             </a>
-
         </div>
 
-    
+        <!-- LIVE NOTIFICATION -->
+        <div id="liveNotification" class="alert alert-info d-none" role="alert"></div>
+
+        <!-- ANALYTICS CARDS -->
         <div class="row g-4 mb-4">
 
             <div class="col-md-3">
@@ -71,16 +69,12 @@
         <!-- MAIN SECTION -->
         <div class="row g-4">
 
-            <!-- LEFT -->
+            <!-- LEFT FORM -->
             <div class="col-lg-4">
-
                 <div class="card shadow-sm border-0">
-
                     <div class="card-body">
 
-                        <h3 class="mb-4">
-                            Add New Task
-                        </h3>
+                        <h3 class="mb-4">Add New Task</h3>
 
                         <form id="taskForm">
 
@@ -104,19 +98,9 @@
 
                             <div class="mb-3">
                                 <select id="priority" class="form-select">
-
-                                    <option value="Low">
-                                        Low
-                                    </option>
-
-                                    <option value="Medium">
-                                        Medium
-                                    </option>
-
-                                    <option value="High">
-                                        High
-                                    </option>
-
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
                                 </select>
                             </div>
 
@@ -127,207 +111,239 @@
                         </form>
 
                     </div>
-
                 </div>
-
             </div>
 
-            <!-- RIGHT -->
+            <!-- RIGHT TABLE -->
             <div class="col-lg-8">
-
                 <div class="card shadow-sm border-0">
-
                     <div class="card-body">
 
-                        <h3 class="mb-4">
-                            Your Tasks
-                        </h3>
+                        <h3 class="mb-4">Your Tasks</h3>
 
                         <div class="table-responsive">
-
                             <table class="table table-bordered table-hover align-middle">
 
                                 <thead class="table-dark">
-
                                     <tr>
                                         <th>Title</th>
+                                        <th>Description</th>
                                         <th>Priority</th>
                                         <th>Status</th>
+                                        <th>Created Date</th>
                                         <th>Actions</th>
                                     </tr>
-
                                 </thead>
 
-                                <tbody id="taskTableBody">
-
-                                </tbody>
+                                <tbody id="taskTableBody"></tbody>
 
                             </table>
-
                         </div>
 
                     </div>
-
                 </div>
-
             </div>
 
         </div>
 
     </div>
 
-    <script>
+    <!-- SOCKET.IO SCRIPT -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
+    <script>
         const taskForm = document.getElementById("taskForm");
         const taskTableBody = document.getElementById("taskTableBody");
+        const liveNotification = document.getElementById("liveNotification");
 
+        // SOCKET CONNECTION
+        const socket = io();
 
-        // LOAD TASKS
-        async function loadTasks() {
+        socket.on("connect", function () {
+            console.log("WebSocket connected");
+        });
 
-            const response = await fetch("/api/tasks");
-
-            const data = await response.json();
-
-            taskTableBody.innerHTML = "";
-
-            data.tasks.forEach(task => {
-
-                taskTableBody.innerHTML += `
-                
-                <tr>
-
-                    <td>${task.title}</td>
-
-                    <td>
-                        <span class="badge bg-primary">
-                            ${task.priority}
-                        </span>
-                    </td>
-
-                    <td>
-                        <span class="badge ${task.status === 'Completed' ? 'bg-success' : 'bg-warning'}">
-                            ${task.status}
-                        </span>
-                    </td>
-
-                    <td>
-
-                        <button
-                            class="btn btn-success btn-sm"
-                            onclick="updateTask(${task.id})">
-
-                            Complete
-
-                        </button>
-
-                        <button
-                            class="btn btn-danger btn-sm"
-                            onclick="deleteTask(${task.id})">
-
-                            Delete
-
-                        </button>
-
-                    </td>
-
-                </tr>
-                
-                `;
-            });
-        }
-
-
-        // ADD TASK
-        taskForm.addEventListener("submit", async (e) => {
-
-            e.preventDefault();
-
-            const taskData = {
-
-                title: document.getElementById("title").value,
-
-                description: document.getElementById("description").value,
-
-                priority: document.getElementById("priority").value,
-
-                status: "Pending"
-            };
-
-            await fetch("/api/tasks", {
-
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify(taskData)
-            });
-
-            taskForm.reset();
-
+        socket.on("all_task_notifi", function (data) {
+            showNotification(data.message);
             loadTasks();
             loadAnalytics();
         });
 
+        function showNotification(message) {
+            liveNotification.innerText = message;
+            liveNotification.classList.remove("d-none");
+
+            setTimeout(() => {
+                liveNotification.classList.add("d-none");
+            }, 3000);
+        }
+
+        // LOAD TASKS
+        async function loadTasks() {
+            try {
+                const response = await fetch("/api/tasks");
+
+                if (!response.ok) {
+                    console.log("Error loading tasks");
+                    return;
+                }
+
+                const data = await response.json();
+
+                taskTableBody.innerHTML = "";
+
+                if (data.tasks.length === 0) {
+                    taskTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">
+                                No tasks found
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                data.tasks.forEach(task => {
+                    taskTableBody.innerHTML += `
+                        <tr>
+                            <td>${task.title}</td>
+
+                            <td>${task.description}</td>
+
+                            <td>
+                                <span class="badge bg-primary">
+                                    ${task.priority}
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="badge ${task.status === 'Completed' ? 'bg-success' : 'bg-warning'}">
+                                    ${task.status}
+                                </span>
+                            </td>
+
+                            <td>${task.created_date}</td>
+
+                            <td>
+                                <button
+                                    class="btn btn-success btn-sm mb-1"
+                                    onclick="updateTask(${task.id})">
+                                    Complete
+                                </button>
+
+                                <button
+                                    class="btn btn-danger btn-sm mb-1"
+                                    onclick="deleteTask(${task.id})">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.log("Task loading error:", error);
+            }
+        }
+
+        // ADD TASK
+        taskForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const taskData = {
+                title: document.getElementById("title").value,
+                description: document.getElementById("description").value,
+                priority: document.getElementById("priority").value,
+                status: "Pending"
+            };
+
+            try {
+                const response = await fetch("/api/tasks", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(taskData)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(data.error || "Task add failed");
+                    return;
+                }
+
+                taskForm.reset();
+                loadTasks();
+                loadAnalytics();
+
+            } catch (error) {
+                console.log("Add task error:", error);
+            }
+        });
 
         // UPDATE TASK
         async function updateTask(taskId) {
+            try {
+                await fetch(`/api/tasks/${taskId}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        status: "Completed"
+                    })
+                });
 
-            await fetch(`/api/tasks/${taskId}`, {
+                loadTasks();
+                loadAnalytics();
 
-                method: "PUT",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    status: "Completed"
-                })
-            });
-
-            loadTasks();
-            loadAnalytics();
+            } catch (error) {
+                console.log("Update task error:", error);
+            }
         }
-
 
         // DELETE TASK
         async function deleteTask(taskId) {
+            try {
+                await fetch(`/api/tasks/${taskId}`, {
+                    method: "DELETE"
+                });
 
-            await fetch(`/api/tasks/${taskId}`, {
+                loadTasks();
+                loadAnalytics();
 
-                method: "DELETE"
-            });
-
-            loadTasks();
-            loadAnalytics();
+            } catch (error) {
+                console.log("Delete task error:", error);
+            }
         }
-
 
         // LOAD ANALYTICS
         async function loadAnalytics() {
+            try {
+                const response = await fetch("/api/analytics");
 
-            const response = await fetch("/api/analytics");
+                if (!response.ok) {
+                    console.log("Error loading analytics");
+                    return;
+                }
 
-            const data = await response.json();
+                const data = await response.json();
 
-            document.getElementById("totalTasks").innerText = data.total_tasks;
+                document.getElementById("totalTasks").innerText = data.total_tasks;
+                document.getElementById("completedTasks").innerText = data.completed_tasks;
+                document.getElementById("pendingTasks").innerText = data.pending_tasks;
+                document.getElementById("completionPercentage").innerText =
+                    data.completion_percentage + "%";
 
-            document.getElementById("completedTasks").innerText = data.completed_tasks;
-
-            document.getElementById("pendingTasks").innerText = data.pending_tasks;
-
-            document.getElementById("completionPercentage").innerText =
-                data.completion_percentage + "%";
+            } catch (error) {
+                console.log("Analytics loading error:", error);
+            }
         }
-
 
         // INITIAL LOAD
         loadTasks();
         loadAnalytics();
-
     </script>
 
 </body>
